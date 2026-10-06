@@ -1,0 +1,1533 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EL HUÉSPED - Taller de Computación</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Tone.js for synth audio and ambient effects -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap');
+        
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        body {
+            background-color: #030208;
+            color: #d8b4fe;
+            font-family: 'Press Start 2P', monospace;
+            overflow: hidden;
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .pixel-art {
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+
+        /* Retro CRT scanline effect */
+        .crt::after {
+            content: " ";
+            display: block;
+            position: absolute;
+            top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 10, 30, 0) 50%, rgba(0, 0, 0, 0.45) 50%), 
+                        linear-gradient(90deg, rgba(168, 85, 247, 0.03), rgba(0, 0, 0, 0.1), rgba(59, 130, 246, 0.03));
+            z-index: 40;
+            background-size: 100% 4px, 6px 100%;
+            pointer-events: none;
+        }
+
+        .retro-border {
+            border: 3px solid #7e22ce;
+            box-shadow: 0 0 15px rgba(126, 34, 206, 0.6), inset 0 0 10px rgba(88, 28, 135, 0.5);
+        }
+
+        .retro-btn {
+            background: linear-gradient(180deg, #2e1065 0%, #17072b 100%);
+            border: 2px solid #a855f7;
+            color: #f3e8ff;
+            box-shadow: 0 4px 0 #0f051d, 0 0 10px rgba(168, 85, 247, 0.4);
+            transition: all 0.1s ease;
+            cursor: pointer;
+            text-shadow: 2px 2px 0px #000;
+        }
+
+        .retro-btn:hover {
+            background: linear-gradient(180deg, #3b0764 0%, #2e1065 100%);
+            border-color: #c084fc;
+            box-shadow: 0 4px 0 #0f051d, 0 0 15px rgba(192, 132, 252, 0.7);
+            transform: translateY(-2px);
+        }
+
+        .retro-btn:active {
+            transform: translateY(2px);
+            box-shadow: 0 1px 0 #0f051d;
+        }
+
+        .item-slot {
+            background: #0d0718;
+            border: 2px solid #581c87;
+            border-radius: 6px;
+            transition: all 0.2s ease;
+        }
+
+        .item-slot.active {
+            border-color: #eab308;
+            box-shadow: 0 0 10px rgba(234, 179, 8, 0.7);
+            background: #1e1035;
+        }
+
+        .glitch-title {
+            animation: glitch 3s infinite;
+        }
+
+        @keyframes glitch {
+            0% { text-shadow: 3px 0 #ef4444, -3px 0 #3b82f6; }
+            20% { text-shadow: -2px 0 #a855f7, 2px 0 #ef4444; }
+            40% { text-shadow: 2px -2px #3b82f6, -2px 2px #a855f7; }
+            60% { text-shadow: 0 0 #ef4444, 0 0 #3b82f6; }
+            100% { text-shadow: 3px 0 #ef4444, -3px 0 #3b82f6; }
+        }
+
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #090514;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #581c87;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body class="crt">
+
+    <div id="game-container" class="relative w-full max-w-5xl h-[640px] bg-slate-950 border-4 border-purple-900 rounded-lg overflow-hidden flex flex-col md:flex-row shadow-2xl shadow-purple-950/80">
+        
+        <!-- SIDEBAR HUD -->
+        <div id="sidebar-hud" class="hidden w-full md:w-60 bg-[#0a0518] border-b-4 md:border-b-0 md:border-r-4 border-purple-900 p-3 flex flex-col justify-between z-20 shrink-0">
+            <div>
+                <!-- LIVES / VIDAS -->
+                <div class="mb-3 border-b border-purple-900/60 pb-2">
+                    <h3 class="text-[9px] text-purple-300 font-bold tracking-widest mb-1 text-center uppercase">VIDAS</h3>
+                    <div id="lives-container" class="flex justify-center gap-2 text-red-500 text-base">
+                        <i class="fa-solid fa-heart animate-pulse"></i>
+                        <i class="fa-solid fa-heart animate-pulse"></i>
+                        <i class="fa-solid fa-heart animate-pulse"></i>
+                    </div>
+                </div>
+
+                <!-- INVENTORY / OBJETOS -->
+                <div>
+                    <h3 class="text-[9px] text-purple-300 font-bold tracking-widest mb-2 text-center uppercase">OBJETOS (1-7)</h3>
+                    <div id="inventory-slots" class="space-y-1.5 max-h-[260px] overflow-y-auto pr-1">
+                        <!-- Generated dynamically -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- CONTROLS QUICK INFO -->
+            <div class="hidden md:block pt-2 border-t border-purple-900/60 text-[7px] text-purple-400 leading-relaxed">
+                <p class="mb-0.5"><span class="text-yellow-400">WASD:</span> Moverse | <span class="text-yellow-400">E/Ent:</span> Interactuar</p>
+                <p class="mb-0.5"><span class="text-yellow-400">F:</span> Linterna | <span class="text-yellow-400">Q:</span> Esconderse</p>
+                <p><span class="text-yellow-400">1-7:</span> Seleccionar Objeto</p>
+            </div>
+        </div>
+
+        <!-- MAIN VIEWPORT -->
+        <div class="relative flex-1 bg-black flex flex-col justify-between overflow-hidden">
+            
+            <!-- TOP BAR OVERLAY -->
+            <div id="top-bar-overlay" class="hidden z-20 bg-slate-950/90 px-3 py-2 border-b-2 border-purple-900 flex justify-between items-start gap-2 text-[8px]">
+                <div class="text-purple-300 font-semibold tracking-tight leading-tight flex-1">
+                    ESTADO MONSTRUO: <span id="monster-state-txt" class="text-yellow-400">DURMIENDO</span> | TIEMPO: <span id="monster-timer-txt" class="text-red-400">15s</span>
+                </div>
+                <!-- OBJECTIVE BOX -->
+                <div class="bg-purple-950/90 border border-purple-600 rounded p-1.5 text-right max-w-xs shrink-0 shadow-lg shadow-purple-950">
+                    <span class="text-yellow-400 font-bold block mb-0.5">OBJETIVO:</span>
+                    <span id="objective-text" class="text-purple-200 text-[8px] leading-tight block">
+                        Busca la llave en tu habitación y abre la puerta.
+                    </span>
+                </div>
+            </div>
+
+            <!-- CANVAS SCREEN -->
+            <div class="relative flex-1 flex items-center justify-center bg-black overflow-hidden">
+                <canvas id="gameCanvas" width="760" height="420" class="block pixel-art w-full h-full object-contain"></canvas>
+
+                <!-- MAIN MENU SCREEN -->
+                <div id="main-menu" class="absolute inset-0 z-30 bg-slate-950 flex flex-col justify-between p-6">
+                    <div class="relative z-10 flex flex-col items-center justify-center flex-1 my-auto">
+                        <div class="text-center mb-6">
+                            <h1 class="text-3xl sm:text-5xl font-extrabold text-purple-300 tracking-wider glitch-title uppercase drop-shadow-[0_5px_5px_rgba(0,0,0,0.9)]">
+                                EL HUÉSPED
+                            </h1>
+                            <p class="text-[9px] text-red-500 tracking-widest mt-2 font-bold uppercase">
+                                MANSIÓN DEL CULTO OSCT
+                            </p>
+                        </div>
+
+                        <!-- MENU BUTTONS -->
+                        <div class="space-y-3 w-64">
+                            <button onclick="startGame()" class="retro-btn w-full py-3 text-xs font-bold tracking-widest uppercase">
+                                INICIO
+                            </button>
+                            <button onclick="openConfigModal()" class="retro-btn w-full py-3 text-xs font-bold tracking-widest uppercase">
+                                CONFIGURACIÓN
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- FOOTER CREDITS -->
+                    <div class="relative z-10 flex justify-between items-end text-[9px] text-purple-400 font-mono tracking-wider pt-2 border-t border-purple-950/50">
+                        <span>VERSION 2.05</span>
+                        <div class="text-right">
+                            <span class="block">CREADOR:</span>
+                            <span class="text-purple-300 font-bold">TALLER DE COMPUTACION</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- INTRO CUTSCENE OVERLAY -->
+                <div id="cutscene-overlay" class="hidden absolute inset-0 z-30 bg-black flex flex-col justify-center items-center">
+                    <video id="intro-video" class="w-full h-full object-contain pointer-events-none" playsinline>
+                        <source src="https://files.catbox.moe/9ywkzr.mp4" type="video/mp4">
+                        Tu navegador no soporta el formato de video.
+                    </video>
+                    <button onclick="endCutscene()" class="absolute bottom-4 right-4 retro-btn px-5 py-2 text-xs font-bold text-yellow-300 z-40 bg-purple-950/80 border border-purple-500 shadow-lg">
+                        SALTAR CINEMÁTICA [ENTER]
+                    </button>
+                </div>
+
+                <!-- CONFIGURATION MODAL -->
+                <div id="config-modal" class="hidden absolute inset-0 z-40 bg-slate-950/95 flex justify-center items-center p-4">
+                    <div class="retro-border bg-[#0d0718] p-6 rounded-lg w-full max-w-md text-purple-200 text-xs space-y-4 shadow-2xl">
+                        <h2 class="text-yellow-400 text-center text-sm font-bold uppercase tracking-widest border-b border-purple-900 pb-2">
+                            CONFIGURACIÓN DE JUEGO
+                        </h2>
+                        <div class="flex justify-between items-center py-2">
+                            <span>EFECTOS DE SONIDO:</span>
+                            <button onclick="toggleAudio()" id="cfg-audio-btn" class="retro-btn px-3 py-1 text-[10px]">
+                                ACTIVADO
+                            </button>
+                        </div>
+                        <div class="pt-2 text-center border-t border-purple-900">
+                            <button onclick="closeConfigModal()" class="retro-btn px-6 py-2 text-[10px]">
+                                CERRAR
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- GAMEOVER MODAL -->
+                <div id="end-modal" class="hidden absolute inset-0 z-40 bg-slate-950/95 flex flex-col justify-center items-center p-6 text-center">
+                    <div id="end-icon" class="text-5xl text-red-500 mb-4 animate-pulse">
+                        <i class="fa-solid fa-skull"></i>
+                    </div>
+                    <h2 id="end-title" class="text-2xl sm:text-3xl text-red-500 font-extrabold mb-3 glitch-title uppercase">
+                        ¡HAS SIDO ATRAPADO!
+                    </h2>
+                    <p id="end-msg" class="text-xs text-purple-200 mb-6 max-w-md leading-relaxed">
+                        Te has quedado sin vidas. Las sombras de la mansión te han consumido...
+                    </p>
+                    <button onclick="returnToMenu()" class="retro-btn px-8 py-3 text-xs font-bold text-yellow-300">
+                        <i class="fa-solid fa-house mr-2"></i>VOLVER AL MENÚ PRINCIPAL
+                    </button>
+                </div>
+
+                <!-- CLIFFHANGER VICTORY MODAL -->
+                <div id="victory-modal" class="hidden absolute inset-0 z-40 bg-black flex flex-col justify-between items-center p-6 text-center">
+                    <div class="relative w-full h-[300px] flex items-center justify-center border-b border-purple-900 overflow-hidden">
+                        <canvas id="victoryCanvas" width="760" height="280" class="pixel-art"></canvas>
+                    </div>
+                    <div class="max-w-xl space-y-3 py-2">
+                        <p id="victory-text" class="text-xs sm:text-sm text-yellow-400 font-bold tracking-wider glitch-title uppercase leading-relaxed">
+                            "Escapaste, pero ¿por cuánto tiempo?"
+                        </p>
+                        <button onclick="returnToMenu()" class="retro-btn px-8 py-3 text-xs font-bold text-yellow-300 uppercase">
+                            MENÚ PRINCIPAL [CONTINUARÁ...]
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- BOTTOM DIALOGUE BAR -->
+            <div id="bottom-dialogue" class="hidden z-20 bg-[#0a0518] border-t-2 border-purple-900 p-3 min-h-[65px] flex flex-col justify-center">
+                <span id="speaker-name" class="text-[9px] text-yellow-400 font-bold tracking-widest uppercase mb-1">
+                    PROTAGONISTA:
+                </span>
+                <p id="dialogue-text" class="text-[10px] text-purple-200 font-mono leading-relaxed truncate">
+                    Lleva polera negra, short naranja y piel morena. ¡Cuidado con los centinelas y el monstruo!
+                </p>
+            </div>
+
+        </div>
+
+    </div>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+
+        const victoryCanvas = document.getElementById("victoryCanvas");
+        const vCtx = victoryCanvas ? victoryCanvas.getContext("2d") : null;
+
+        let audioEnabled = true;
+
+        const sfx = {
+            step: () => {
+                if (!audioEnabled) return;
+                try {
+                    const synth = new Tone.MembraneSynth({ volume: -24 }).toDestination();
+                    synth.triggerAttackRelease("C1", "32n");
+                } catch(e){}
+            },
+            pickup: () => {
+                if (!audioEnabled) return;
+                try {
+                    const synth = new Tone.Synth({ volume: -10 }).toDestination();
+                    synth.triggerAttackRelease("E5", "16n");
+                } catch(e){}
+            },
+            jumpscare: () => {
+                if (!audioEnabled) return;
+                try {
+                    const noise = new Tone.NoiseSynth({
+                        envelope: { attack: 0.01, decay: 0.6, sustain: 0 },
+                        volume: -2
+                    }).toDestination();
+                    noise.triggerAttack();
+
+                    const synth = new Tone.Synth({ volume: 2 }).toDestination();
+                    synth.triggerAttackRelease("F6", "8n");
+                } catch(e){}
+            },
+            unlock: () => {
+                if (!audioEnabled) return;
+                try {
+                    const synth = new Tone.PolySynth(Tone.Synth).toDestination();
+                    synth.triggerAttackRelease(["C4", "G4", "C5"], "8n");
+                } catch(e){}
+            }
+        };
+
+        function toggleAudio() {
+            audioEnabled = !audioEnabled;
+            const btn = document.getElementById("cfg-audio-btn");
+            btn.innerText = audioEnabled ? "ACTIVADO" : "DESACTIVADO";
+            if (audioEnabled) {
+                try { Tone.start(); } catch(e){}
+            }
+        }
+
+        let gameState = "MENU"; // MENU, CUTSCENE, PLAYING, GAMEOVER, VICTORY
+        let currentRoom = 1; 
+        let lives = 3;
+
+        let monsterCycleState = "SLEEPING"; // SLEEPING, ACTIVE
+        let monsterTimer = 15;
+        let monsterInterval = null;
+
+        const player = {
+            x: 370,
+            y: 220,
+            width: 36,
+            height: 52,
+            speed: 2.5,
+            dir: 'down',
+            flashlightOn: true,
+            isHiding: false,
+            inventory: [
+                { id: 'empty', name: 'Vacío', icon: 'fa-ban', color: 'text-gray-500' },
+                { id: 'empty', name: 'Vacío', icon: 'fa-ban', color: 'text-gray-500' },
+                { id: 'empty', name: 'Vacío', icon: 'fa-ban', color: 'text-gray-500' },
+                { id: 'empty', name: 'Vacío', icon: 'fa-ban', color: 'text-gray-500' },
+                { id: 'empty', name: 'Vacío', icon: 'fa-ban', color: 'text-gray-500' },
+                { id: 'empty', name: 'Vacío', icon: 'fa-ban', color: 'text-gray-500' },
+                { id: 'empty', name: 'Vacío', icon: 'fa-ban', color: 'text-gray-500' }
+            ],
+            selectedSlot: 0
+        };
+
+        const rooms = {
+            1: {
+                title: "DORMITORIO",
+                objective: "Busca la llave en la mesa de estudio y abre la puerta superior al pasillo.",
+                walls: [
+                    { x: 40, y: 30, w: 310, h: 20 },
+                    { x: 410, y: 30, w: 310, h: 20 },
+                    { x: 40, y: 30, w: 20, h: 360 },
+                    { x: 40, y: 370, w: 680, h: 20 },
+                    { x: 700, y: 30, w: 20, h: 360 }
+                ],
+                door: { x: 350, y: 20, w: 60, h: 30, unlocked: false },
+                desk: { x: 70, y: 60, w: 100, h: 80, searched: false },
+                wardrobe: { x: 550, y: 50, w: 110, h: 130 },
+                bed: { x: 480, y: 230, w: 190, h: 120 }
+            },
+            2: {
+                title: "SALÓN PRINCIPAL",
+                objective: "Esquiva los puntos rojos centinelas, consigue la linterna y baja al sótano.",
+                walls: [
+                    { x: 40, y: 30, w: 680, h: 20 },
+                    { x: 40, y: 370, w: 680, h: 20 },
+                    { x: 40, y: 30, w: 20, h: 140 },
+                    { x: 40, y: 230, w: 20, h: 160 },
+                    { x: 700, y: 30, w: 20, h: 140 },
+                    { x: 700, y: 230, w: 20, h: 160 }
+                ],
+                doorBack: { x: 350, y: 360, w: 60, h: 30 },
+                doorBasement: { x: 350, y: 20, w: 60, h: 30, unlocked: false, solved: false },
+                doorMonster: { x: 690, y: 160, w: 30, h: 80, unlocked: false },
+                hidingLocker: { x: 70, y: 300, w: 60, h: 60 },
+                cabinetFlashlight: { x: 600, y: 50, w: 80, h: 60, searched: false },
+                tableHall: { x: 480, y: 290, w: 80, h: 60, searched: false },
+                sentinels: [
+                    { x: 200, y: 150, vx: 2.5, vy: 1.8, minX: 60, maxX: 680, minY: 50, maxY: 340, width: 8, height: 8, radius: 15 },
+                    { x: 500, y: 200, vx: -2.2, vy: 2.0, minX: 60, maxX: 680, minY: 50, maxY: 340, width: 8, height: 8, radius: 15 },
+                    { x: 350, y: 280, vx: 2.0, vy: -2.3, minX: 60, maxX: 680, minY: 50, maxY: 340, width: 8, height: 8, radius: 15 },
+                    { x: 150, y: 100, vx: -1.8, vy: 2.2, minX: 60, maxX: 680, minY: 50, maxY: 340, width: 8, height: 8, radius: 15 },
+                    { x: 600, y: 300, vx: 2.3, vy: -1.9, minX: 60, maxX: 680, minY: 50, maxY: 340, width: 8, height: 8, radius: 15 }
+                ]
+            },
+            3: {
+                title: "SÓTANO OSCURO",
+                objective: "Activa el switch en la pared para desactivar el láser, alimenta al perro y obtén la palanca.",
+                walls: [
+                    { x: 40, y: 30, w: 680, h: 20 },
+                    { x: 40, y: 370, w: 680, h: 20 },
+                    { x: 40, y: 30, w: 20, h: 360 },
+                    { x: 700, y: 30, w: 20, h: 360 }
+                ],
+                doorBackHall: { x: 350, y: 360, w: 60, h: 30 },
+                dog: { x: 80, y: 60, w: 50, h: 40, distracted: false },
+                plate: { x: 145, y: 70, w: 36, h: 24, hasMeat: false },
+                wallSwitch: { x: 60, y: 180, w: 30, h: 40, active: true, puzzlesSolved: 0 },
+                laserBox: { x: 190, y: 90, w: 120, h: 100, active: true },
+                leverBox: { x: 220, y: 120, w: 60, h: 60, collected: false }
+            },
+            4: {
+                title: "SALA DEL MONSTRUO",
+                objective: "Resuelve el puzle matemático del monstruo, retira las tablas y escapa.",
+                walls: [
+                    { x: 40, y: 30, w: 680, h: 20 },
+                    { x: 40, y: 370, w: 680, h: 20 },
+                    { x: 40, y: 30, w: 20, h: 360 },
+                    { x: 700, y: 30, w: 20, h: 360 }
+                ],
+                doorBackHall: { x: 40, y: 160, w: 30, h: 80 },
+                monster: { 
+                    x: 380, 
+                    y: 200, 
+                    w: 64, 
+                    h: 110, 
+                    vx: 1.5, 
+                    vy: 1.0, 
+                    radius: 95,
+                    hasKey: true 
+                },
+                exitPlanks: { x: 620, y: 320, w: 80, h: 50, barricaded: true }
+            }
+        };
+
+        const keys = {};
+
+        window.addEventListener('keydown', (e) => {
+            keys[e.code] = true;
+
+            if (gameState === "CUTSCENE" && (e.code === "Enter" || e.code === "Space")) {
+                endCutscene();
+            }
+
+            if (gameState === "PLAYING") {
+                if (e.code === 'KeyF') player.flashlightOn = !player.flashlightOn;
+                if (e.code === 'KeyQ') toggleHiding();
+                if (e.code === 'KeyE' || e.code === 'Enter') handleInteraction();
+                if (e.code === 'Digit1') selectInventorySlot(0);
+                if (e.code === 'Digit2') selectInventorySlot(1);
+                if (e.code === 'Digit3') selectInventorySlot(2);
+                if (e.code === 'Digit4') selectInventorySlot(3);
+                if (e.code === 'Digit5') selectInventorySlot(4);
+                if (e.code === 'Digit6') selectInventorySlot(5);
+                if (e.code === 'Digit7') selectInventorySlot(6);
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            keys[e.code] = false;
+        });
+
+        function buildInventoryUI() {
+            const container = document.getElementById("inventory-slots");
+            container.innerHTML = "";
+            player.inventory.forEach((item, index) => {
+                const slotDiv = document.createElement("div");
+                slotDiv.id = `slot-${index}`;
+                slotDiv.className = `item-slot p-1.5 flex items-center gap-2 cursor-pointer ${index === player.selectedSlot ? 'active' : ''}`;
+                slotDiv.onclick = () => selectInventorySlot(index);
+                slotDiv.innerHTML = `
+                    <span class="text-[8px] text-yellow-400 font-bold">[${index+1}]</span>
+                    <div class="w-6 h-6 flex items-center justify-center ${item.color} text-sm" id="icon-slot-${index}">
+                        <i class="fa-solid ${item.icon}"></i>
+                    </div>
+                    <span class="text-[8px] text-purple-200 truncate" id="name-slot-${index}">${item.name}</span>
+                `;
+                container.appendChild(slotDiv);
+            });
+        }
+
+        function selectInventorySlot(index) {
+            player.selectedSlot = index;
+            for (let i = 0; i < 7; i++) {
+                const slot = document.getElementById(`slot-${i}`);
+                if (slot) {
+                    if (i === index) slot.classList.add("active");
+                    else slot.classList.remove("active");
+                }
+            }
+        }
+
+        function updateDialogue(speaker, text) {
+            document.getElementById("speaker-name").innerText = `${speaker}:`;
+            document.getElementById("dialogue-text").innerText = text;
+        }
+
+        function updateHUD() {
+            const livesContainer = document.getElementById("lives-container");
+            livesContainer.innerHTML = "";
+            for (let i = 0; i < 3; i++) {
+                if (i < lives) {
+                    livesContainer.innerHTML += `<i class="fa-solid fa-heart animate-pulse"></i>`;
+                } else {
+                    livesContainer.innerHTML += `<i class="fa-regular fa-heart opacity-30"></i>`;
+                }
+            }
+
+            player.inventory.forEach((item, index) => {
+                const iconEl = document.getElementById(`icon-slot-${index}`);
+                const nameEl = document.getElementById(`name-slot-${index}`);
+                if (iconEl && nameEl) {
+                    iconEl.innerHTML = `<i class="fa-solid ${item.icon}"></i>`;
+                    iconEl.className = `w-6 h-6 flex items-center justify-center ${item.color} text-sm`;
+                    nameEl.innerText = item.name;
+                }
+            });
+
+            document.getElementById("objective-text").innerText = rooms[currentRoom].objective;
+        }
+
+        function addItemToInventory(id, name, icon, color) {
+            for (let i = 0; i < player.inventory.length; i++) {
+                if (player.inventory[i].id === 'empty') {
+                    player.inventory[i] = { id, name, icon, color };
+                    buildInventoryUI();
+                    sfx.pickup();
+                    showItemPopup(id, name, icon);
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function showItemPopup(id, name, icon) {
+            let desc = "";
+            if (id === 'key') desc = "¡Obtuviste una llave! Puede utilizarse para abrir puertas cerradas en la mansión.";
+            else if (id === 'meat') desc = "¡Obtuviste carne! Puede utilizarse como distractor, pero ¿con quién?";
+            else if (id === 'flashlight') desc = "¡Obtuviste una linterna! Presiona F para prenderla y alumbrar tu camino en la oscuridad.";
+            else if (id === 'lever') desc = "¡Obtuviste una palanca! Puedes quitar tablones y candados pesados ahora.";
+            else if (id === 'keyMonster') desc = "¡Obtuviste la llave del monstruo! El camino final está abierto.";
+
+            const modal = document.createElement('div');
+            modal.id = "item-popup-modal";
+            modal.className = "absolute inset-0 z-50 bg-slate-950/90 flex justify-center items-center p-4";
+            modal.innerHTML = `
+                <div class="retro-border bg-[#0d0718] p-8 rounded-lg w-full max-w-md text-purple-200 text-xs space-y-6 shadow-2xl text-center relative">
+                    <button onclick="closeItemPopup()" class="absolute top-3 right-3 text-red-400 hover:text-red-200 text-base font-bold px-2 py-1 bg-red-950/40 border border-red-800 rounded">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                    <h2 class="text-yellow-400 text-sm font-bold uppercase tracking-widest border-b border-purple-900 pb-2">
+                        ¡OBJETO OBTENIDO!
+                    </h2>
+                    <div class="w-20 h-20 mx-auto flex items-center justify-center bg-purple-950 border-2 border-purple-600 rounded-full text-3xl text-yellow-400 shadow-[0_0_20px_rgba(168,85,247,0.5)]">
+                        <i class="fa-solid ${icon}"></i>
+                    </div>
+                    <p class="text-purple-100 text-xs leading-relaxed font-mono">
+                        ${desc}
+                    </p>
+                    <button onclick="closeItemPopup()" class="retro-btn px-6 py-2 text-xs font-bold text-yellow-300">
+                        CONTINUAR [ENTER]
+                    </button>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+
+        function closeItemPopup() {
+            const m = document.getElementById("item-popup-modal");
+            if (m) m.remove();
+        }
+
+        function hasItem(id) {
+            return player.inventory.some(item => item.id === id);
+        }
+
+        function removeItem(id) {
+            for (let i = 0; i < player.inventory.length; i++) {
+                if (player.inventory[i].id === id) {
+                    player.inventory[i] = { id: 'empty', name: 'Vacío', icon: 'fa-ban', color: 'text-gray-500' };
+                    buildInventoryUI();
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function startGame() {
+            try { Tone.start(); } catch(e){}
+            document.getElementById("main-menu").classList.add("hidden");
+            const cutsceneOverlay = document.getElementById("cutscene-overlay");
+            const video = document.getElementById("intro-video");
+
+            cutsceneOverlay.classList.remove("hidden");
+            gameState = "CUTSCENE";
+
+            if (video) {
+                video.currentTime = 0;
+                video.play().catch(() => {});
+                video.onended = () => endCutscene();
+            }
+        }
+
+        function endCutscene() {
+            const video = document.getElementById("intro-video");
+            if (video) video.pause();
+            document.getElementById("cutscene-overlay").classList.add("hidden");
+            document.getElementById("sidebar-hud").classList.remove("hidden");
+            document.getElementById("top-bar-overlay").classList.remove("hidden");
+            document.getElementById("bottom-dialogue").classList.remove("hidden");
+            
+            gameState = "PLAYING";
+            currentRoom = 1;
+            lives = 3;
+            player.x = 350;
+            player.y = 200;
+            
+            buildInventoryUI();
+            // La linterna ya no se da al inicio, se consigue mediante puzle en el salón
+            
+            updateHUD();
+            startMonsterCycle();
+            updateDialogue("PROTAGONISTA", "¡Cuidado con los centinelas laterales del pasillo! Busca la llave en el dormitorio.");
+        }
+
+        function openConfigModal() { document.getElementById("config-modal").classList.remove("hidden"); }
+        function closeConfigModal() { document.getElementById("config-modal").classList.add("hidden"); }
+
+        function switchRoom(targetRoom, newX, newY) {
+            currentRoom = targetRoom;
+            player.x = newX;
+            player.y = newY;
+            player.isHiding = false;
+            updateHUD();
+
+            if (currentRoom === 1) updateDialogue("PROTAGONISTA", "Dormitorio.");
+            if (currentRoom === 2) updateDialogue("PROTAGONISTA", "Pasillo principal. ¡Esquiva los centinelas móviles!");
+            if (currentRoom === 3) updateDialogue("PROTAGONISTA", "Sótano. El perro cuida la palanca.");
+            if (currentRoom === 4) updateDialogue("PROTAGONISTA", "Sala del Monstruo. ¡Cuidado con su radio de captura!");
+        }
+
+        function startMonsterCycle() {
+            monsterCycleState = "SLEEPING";
+            monsterTimer = 15;
+            clearInterval(monsterInterval);
+
+            monsterInterval = setInterval(() => {
+                if (gameState !== "PLAYING") return;
+                monsterTimer--;
+
+                document.getElementById("monster-state-txt").innerText = monsterCycleState === "SLEEPING" ? "DURMIENDO" : "ACTIVO / PATRULLANDO";
+                document.getElementById("monster-timer-txt").innerText = `${monsterTimer}s`;
+
+                if (monsterTimer <= 0) {
+                    if (monsterCycleState === "SLEEPING") {
+                        monsterCycleState = "ACTIVE";
+                        monsterTimer = 60;
+                        updateDialogue("SISTEMA", "¡El monstruo ha despertado y patrulla activamente!");
+                    } else {
+                        monsterCycleState = "SLEEPING";
+                        monsterTimer = 15;
+                        updateDialogue("SISTEMA", "El monstruo vuelve a descansar.");
+                    }
+                }
+            }, 1000);
+        }
+
+        function toggleHiding() {
+            const current = rooms[currentRoom];
+            let nearHidingSpot = false;
+
+            if (currentRoom === 1 && isColliding({x: player.x-10, y: player.y-10, width: player.width+20, height: player.height+20}, current.wardrobe)) {
+                nearHidingSpot = true;
+            } else if (currentRoom === 2 && isColliding({x: player.x-10, y: player.y-10, width: player.width+20, height: player.height+20}, current.hidingLocker)) {
+                nearHidingSpot = true;
+            }
+
+            if (nearHidingSpot) {
+                player.isHiding = !player.isHiding;
+                if (player.isHiding) {
+                    updateDialogue("PROTAGONISTA", "Te escondiste en el armario.");
+                } else {
+                    updateDialogue("PROTAGONISTA", "Saliste del escondite.");
+                }
+            } else {
+                updateDialogue("SISTEMA", "No hay ningún armario o taquilla cerca para esconderse.");
+            }
+        }
+
+        function handleInteraction() {
+            const current = rooms[currentRoom];
+            const interactBox = { x: player.x - 20, y: player.y - 20, width: player.width + 40, height: player.height + 40 };
+
+            if (currentRoom === 1) {
+                if (isColliding(interactBox, current.desk)) {
+                    if (!current.desk.searched) {
+                        openEducationalDeskPuzzle();
+                    } else {
+                        updateDialogue("PROTAGONISTA", "La mesa de estudio ya fue investigada.");
+                    }
+                    return;
+                }
+                if (isColliding(interactBox, current.door)) {
+                    if (!current.door.unlocked) {
+                        openDoorPuzzle(1);
+                    } else {
+                        switchRoom(2, 350, 320);
+                    }
+                    return;
+                }
+                if (isColliding(interactBox, current.wardrobe)) {
+                    toggleHiding();
+                    return;
+                }
+            } else if (currentRoom === 2) {
+                if (isColliding(interactBox, current.doorBack)) {
+                    switchRoom(1, 350, 60);
+                    return;
+                }
+                if (isColliding(interactBox, current.doorMonster)) {
+                    if (!current.doorMonster.unlocked) {
+                        if (hasItem('key')) {
+                            current.doorMonster.unlocked = true;
+                            switchRoom(4, 80, 180);
+                        } else {
+                            updateDialogue("SISTEMA", "La puerta está cerrada con llave.");
+                        }
+                    } else {
+                        switchRoom(4, 80, 180);
+                    }
+                    return;
+                }
+                if (isColliding(interactBox, current.doorBasement)) {
+                    if (!current.doorBasement.solved) {
+                        openBasementBlockPuzzle();
+                    } else {
+                        switchRoom(3, 350, 60);
+                    }
+                    return;
+                }
+                if (isColliding(interactBox, current.cabinetFlashlight)) {
+                    if (!current.cabinetFlashlight.searched) {
+                        openFlashlightEquationPuzzle();
+                    } else {
+                        updateDialogue("PROTAGONISTA", "El mueble del salón ya fue investigado.");
+                    }
+                    return;
+                }
+                if (isColliding(interactBox, current.tableHall)) {
+                    if (!current.tableHall.searched) {
+                        current.tableHall.searched = true;
+                        addItemToInventory('meat', 'Carne', 'fa-drumstick-bite', 'text-red-400');
+                    } else {
+                        updateDialogue("PROTAGONISTA", "La mesa está vacía.");
+                    }
+                    return;
+                }
+                if (isColliding(interactBox, current.hidingLocker)) {
+                    toggleHiding();
+                    return;
+                }
+            } else if (currentRoom === 3) {
+                if (isColliding(interactBox, current.doorBackHall)) {
+                    switchRoom(2, 350, 50);
+                    return;
+                }
+                if (isColliding(interactBox, current.wallSwitch)) {
+                    if (current.wallSwitch.active) {
+                        if (current.wallSwitch.puzzlesSolved < 2) {
+                            openLaserEquationPuzzle();
+                        } else {
+                            current.wallSwitch.active = false;
+                            current.laserBox.active = false;
+                            updateDialogue("SISTEMA", "¡Switch activado! Barrera láser desactivada permanentemente.");
+                        }
+                    } else {
+                        updateDialogue("SISTEMA", "El switch ya fue accionado y el láser está apagado.");
+                    }
+                    return;
+                }
+                if (isColliding(interactBox, current.plate)) {
+                    if (!current.plate.hasMeat) {
+                        if (hasItem('meat')) {
+                            removeItem('meat');
+                            current.plate.hasMeat = true;
+                            current.dog.distracted = true;
+                            updateDialogue("PROTAGONISTA", "Dejaste la carne en el plato. El perro está distraído comiendo.");
+                        } else {
+                            updateDialogue("PROTAGONISTA", "Necesitas carne en tu inventario para ponerla en el plato.");
+                        }
+                    } else {
+                        updateDialogue("PROTAGONISTA", "El plato ya tiene carne y el perro está comiendo.");
+                    }
+                    return;
+                }
+                if (isColliding(interactBox, current.dog)) {
+                    if (!current.dog.distracted) {
+                        handleLifeLoss("¡El perro feroz te atacó por acercarte sin distraerlo!");
+                    } else {
+                        updateDialogue("PROTAGONISTA", "El perro está calmado comiendo en su esquina.");
+                    }
+                    return;
+                }
+                if (isColliding(interactBox, current.leverBox)) {
+                    if (current.laserBox.active) {
+                        handleLifeLoss("¡Intentaste coger la palanca a través de la barrera láser activa!");
+                        player.x = 350;
+                        player.y = 300;
+                        return;
+                    }
+                    if (!current.leverBox.collected) {
+                        current.leverBox.collected = true;
+                        addItemToInventory('lever', 'Palanca', 'fa-screwdriver', 'text-cyan-400');
+                    } else {
+                        updateDialogue("PROTAGONISTA", "Ya cogiste la palanca.");
+                    }
+                    return;
+                }
+            } else if (currentRoom === 4) {
+                if (isColliding(interactBox, current.doorBackHall)) {
+                    switchRoom(2, 650, 160);
+                    return;
+                }
+                if (isColliding(interactBox, current.exitPlanks)) {
+                    if (current.exitPlanks.barricaded) {
+                        if (hasItem('lever')) {
+                            current.exitPlanks.barricaded = false;
+                            sfx.unlock();
+                            triggerVictory();
+                        } else {
+                            updateDialogue("SISTEMA", "Las tablas y el candado bloquean la salida. Necesitas la palanca.");
+                        }
+                    }
+                    return;
+                }
+                if (isColliding(interactBox, current.monster)) {
+                    if (!hasItem('keyMonster')) {
+                        openMonsterMathPuzzle();
+                    } else {
+                        updateDialogue("PROTAGONISTA", "Ya resolviste el desafío del monstruo.");
+                    }
+                    return;
+                }
+            }
+        }
+
+        function closeModal() {
+            const m = document.getElementById("puzzle-modal");
+            if (m) m.remove();
+        }
+
+        function openEducationalDeskPuzzle() {
+            const modal = document.createElement('div');
+            modal.id = "puzzle-modal";
+            modal.className = "absolute inset-0 z-50 bg-slate-950/95 flex justify-center items-center p-4";
+            modal.innerHTML = `
+                <div class="retro-border bg-[#0d0718] p-6 rounded-lg w-full max-w-sm text-purple-200 text-xs space-y-4 shadow-2xl text-center">
+                    <h2 class="text-yellow-400 text-sm font-bold uppercase tracking-widest border-b border-purple-900 pb-2">
+                        PUZLE DE ESTUDIO (CIENCIAS)
+                    </h2>
+                    <p class="text-purple-300 text-[10px] leading-relaxed">
+                        ¿Cuál es el planeta rojo del sistema solar?
+                    </p>
+                    <div class="space-y-2 pt-2">
+                        <button onclick="submitDeskPuzzle('Marte')" class="retro-btn w-full py-2 text-xs">A) Marte</button>
+                        <button onclick="submitDeskPuzzle('Venus')" class="retro-btn w-full py-2 text-xs">B) Venus</button>
+                        <button onclick="submitDeskPuzzle('Júpiter')" class="retro-btn w-full py-2 text-xs">C) Júpiter</button>
+                    </div>
+                    <button onclick="closeModal()" class="text-[9px] text-red-400 mt-2 underline block mx-auto">Cerrar</button>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+
+        function submitDeskPuzzle(ans) {
+            closeModal();
+            if (ans === 'Marte') {
+                sfx.unlock();
+                rooms[1].desk.searched = true;
+                addItemToInventory('key', 'Llave', 'fa-key', 'text-yellow-400');
+                updateDialogue("PROTAGONISTA", "¡Correcto! Encontraste la llave del dormitorio.");
+            } else {
+                handleLifeLoss("¡Respuesta incorrecta en el estudio!");
+            }
+        }
+
+        function openDoorPuzzle(roomNum) {
+            const modal = document.createElement('div');
+            modal.id = "puzzle-modal";
+            modal.className = "absolute inset-0 z-50 bg-slate-950/95 flex justify-center items-center p-4";
+            modal.innerHTML = `
+                <div class="retro-border bg-[#0d0718] p-6 rounded-lg w-full max-w-sm text-purple-200 text-xs space-y-4 shadow-2xl text-center">
+                    <h2 class="text-yellow-400 text-sm font-bold uppercase tracking-widest border-b border-purple-900 pb-2">
+                        PUZLE DE MULTIPLICACIÓN (PUERTA)
+                    </h2>
+                    <p class="text-purple-300 text-[10px] leading-relaxed">
+                        Resuelve: 7 x 8 = ?
+                    </p>
+                    <div class="space-y-2 pt-2">
+                        <button onclick="submitDoorPuzzle(${roomNum}, 54)" class="retro-btn w-full py-2 text-xs">A) 54</button>
+                        <button onclick="submitDoorPuzzle(${roomNum}, 56)" class="retro-btn w-full py-2 text-xs">B) 56</button>
+                        <button onclick="submitDoorPuzzle(${roomNum}, 64)" class="retro-btn w-full py-2 text-xs">C) 64</button>
+                    </div>
+                    <button onclick="closeModal()" class="text-[9px] text-red-400 mt-2 underline block mx-auto">Cerrar</button>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+
+        function submitDoorPuzzle(roomNum, ans) {
+            closeModal();
+            if (ans === 56) {
+                sfx.unlock();
+                rooms[roomNum].door.unlocked = true;
+                updateDialogue("SISTEMA", "¡Puerta desbloqueada con éxito!");
+            } else {
+                handleLifeLoss("¡Multiplicación incorrecta!");
+            }
+        }
+
+        function openBasementBlockPuzzle() {
+            const modal = document.createElement('div');
+            modal.id = "puzzle-modal";
+            modal.className = "absolute inset-0 z-50 bg-slate-950/95 flex justify-center items-center p-4";
+            modal.innerHTML = `
+                <div class="retro-border bg-[#0d0718] p-6 rounded-lg w-full max-w-sm text-purple-200 text-xs space-y-4 shadow-2xl text-center">
+                    <h2 class="text-yellow-400 text-sm font-bold uppercase tracking-widest border-b border-purple-900 pb-2">
+                        MUEBLE BLOQUEANDO SÓTANO
+                    </h2>
+                    <p class="text-purple-300 text-[10px] leading-relaxed">
+                        ¿Cuántas tablas de madera se necesitan para una barricada de 5 filas con 3 listones cada una?
+                    </p>
+                    <div class="space-y-2 pt-2">
+                        <button onclick="submitBasementPuzzle(8)" class="retro-btn w-full py-2 text-xs">A) 8</button>
+                        <button onclick="submitBasementPuzzle(15)" class="retro-btn w-full py-2 text-xs">B) 15</button>
+                        <button onclick="submitBasementPuzzle(12)" class="retro-btn w-full py-2 text-xs">C) 12</button>
+                    </div>
+                    <button onclick="closeModal()" class="text-[9px] text-red-400 mt-2 underline block mx-auto">Cerrar</button>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+
+        function submitBasementPuzzle(ans) {
+            closeModal();
+            if (ans === 15) {
+                sfx.unlock();
+                rooms[2].doorBasement.solved = true;
+                updateDialogue("SISTEMA", "¡Has movido el mueble que bloqueaba el sótano!");
+            } else {
+                handleLifeLoss("¡Cálculo incorrecto!");
+            }
+        }
+
+        function openFlashlightEquationPuzzle() {
+            const modal = document.createElement('div');
+            modal.id = "puzzle-modal";
+            modal.className = "absolute inset-0 z-50 bg-slate-950/95 flex justify-center items-center p-4";
+            modal.innerHTML = `
+                <div class="retro-border bg-[#0d0718] p-6 rounded-lg w-full max-w-sm text-purple-200 text-xs space-y-4 shadow-2xl text-center">
+                    <h2 class="text-yellow-400 text-sm font-bold uppercase tracking-widest border-b border-purple-900 pb-2">
+                        MUEBLE DEL SALÓN (ECUACIÓN)
+                    </h2>
+                    <p class="text-purple-300 text-[10px] leading-relaxed">
+                        Resuelve para obtener la linterna: 4x + 6 = 22
+                    </p>
+                    <div class="space-y-2 pt-2">
+                        <button onclick="submitFlashlightPuzzle(3)" class="retro-btn w-full py-2 text-xs">A) x = 3</button>
+                        <button onclick="submitFlashlightPuzzle(4)" class="retro-btn w-full py-2 text-xs">B) x = 4</button>
+                        <button onclick="submitFlashlightPuzzle(5)" class="retro-btn w-full py-2 text-xs">C) x = 5</button>
+                    </div>
+                    <button onclick="closeModal()" class="text-[9px] text-red-400 mt-2 underline block mx-auto">Cerrar</button>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+
+        function submitFlashlightPuzzle(ans) {
+            closeModal();
+            if (ans === 4) {
+                sfx.unlock();
+                rooms[2].cabinetFlashlight.searched = true;
+                addItemToInventory('flashlight', 'Linterna', 'fa-flashlight', 'text-cyan-400');
+                updateDialogue("PROTAGONISTA", "¡Ecuación correcta! Conseguiste la linterna [F].");
+            } else {
+                handleLifeLoss("¡Ecuación incorrecta en el salón!");
+            }
+        }
+
+        function openLaserEquationPuzzle() {
+            const current = rooms[3];
+            const pNum = current.wallSwitch.puzzlesSolved + 1;
+            const modal = document.createElement('div');
+            modal.id = "puzzle-modal";
+            modal.className = "absolute inset-0 z-50 bg-slate-950/95 flex justify-center items-center p-4";
+            
+            if (pNum === 1) {
+                modal.innerHTML = `
+                    <div class="retro-border bg-[#0d0718] p-6 rounded-lg w-full max-w-sm text-purple-200 text-xs space-y-4 shadow-2xl text-center">
+                        <h2 class="text-yellow-400 text-sm font-bold uppercase tracking-widest border-b border-purple-900 pb-2">
+                            SWITCH DE LÁSER (ECUACIÓN 1/2)
+                        </h2>
+                        <p class="text-purple-300 text-[10px] leading-relaxed">
+                            Resuelve: 3x - 5 = 10
+                        </p>
+                        <div class="space-y-2 pt-2">
+                            <button onclick="submitLaserPuzzle(5)" class="retro-btn w-full py-2 text-xs">A) x = 5</button>
+                            <button onclick="submitLaserPuzzle(3)" class="retro-btn w-full py-2 text-xs">B) x = 3</button>
+                            <button onclick="submitLaserPuzzle(7)" class="retro-btn w-full py-2 text-xs">C) x = 7</button>
+                        </div>
+                        <button onclick="closeModal()" class="text-[9px] text-red-400 mt-2 underline block mx-auto">Cerrar</button>
+                    </div>
+                `;
+            } else {
+                modal.innerHTML = `
+                    <div class="retro-border bg-[#0d0718] p-6 rounded-lg w-full max-w-sm text-purple-200 text-xs space-y-4 shadow-2xl text-center">
+                        <h2 class="text-yellow-400 text-sm font-bold uppercase tracking-widest border-b border-purple-900 pb-2">
+                            SWITCH DE LÁSER (ECUACIÓN 2/2)
+                        </h2>
+                        <p class="text-purple-300 text-[10px] leading-relaxed">
+                            Resuelve: 2(x + 4) = 20
+                        </p>
+                        <div class="space-y-2 pt-2">
+                            <button onclick="submitLaserPuzzle2(6)" class="retro-btn w-full py-2 text-xs">A) x = 6</button>
+                            <button onclick="submitLaserPuzzle2(8)" class="retro-btn w-full py-2 text-xs">B) x = 8</button>
+                            <button onclick="submitLaserPuzzle2(10)" class="retro-btn w-full py-2 text-xs">C) x = 10</button>
+                        </div>
+                        <button onclick="closeModal()" class="text-[9px] text-red-400 mt-2 underline block mx-auto">Cerrar</button>
+                    </div>
+                `;
+            }
+            document.body.appendChild(modal);
+        }
+
+        function submitLaserPuzzle(ans) {
+            closeModal();
+            if (ans === 5) {
+                sfx.unlock();
+                rooms[3].wallSwitch.puzzlesSolved = 1;
+                updateDialogue("SISTEMA", "¡Primera ecuación correcta! Interactúa de nuevo con el switch para la última ecuación.");
+            } else {
+                handleLifeLoss("¡Error en la ecuación del switch láser!");
+            }
+        }
+
+        function submitLaserPuzzle2(ans) {
+            closeModal();
+            if (ans === 6) {
+                sfx.unlock();
+                rooms[3].wallSwitch.puzzlesSolved = 2;
+                rooms[3].wallSwitch.active = false;
+                rooms[3].laserBox.active = false;
+                updateDialogue("SISTEMA", "¡Switch totalmente activado! Barrera láser desactivada.");
+            } else {
+                handleLifeLoss("¡Error en la segunda ecuación del switch láser!");
+            }
+        }
+
+        function openMonsterMathPuzzle() {
+            const modal = document.createElement('div');
+            modal.id = "puzzle-modal";
+            modal.className = "absolute inset-0 z-50 bg-slate-950/95 flex justify-center items-center p-4";
+            modal.innerHTML = `
+                <div class="retro-border bg-[#0d0718] p-6 rounded-lg w-full max-w-sm text-purple-200 text-xs space-y-4 shadow-2xl text-center">
+                    <h2 class="text-yellow-400 text-sm font-bold uppercase tracking-widest border-b border-purple-900 pb-2">
+                        DESAFÍO DEL MONSTRUO
+                    </h2>
+                    <p class="text-purple-300 text-[10px] leading-relaxed">
+                        ¿Cuánto es 12 x 12 - 4?
+                    </p>
+                    <div class="space-y-2 pt-2">
+                        <button onclick="submitMonsterMath(140)" class="retro-btn w-full py-2 text-xs">A) 140</button>
+                        <button onclick="submitMonsterMath(144)" class="retro-btn w-full py-2 text-xs">B) 144</button>
+                        <button onclick="submitMonsterMath(136)" class="retro-btn w-full py-2 text-xs">C) 136</button>
+                    </div>
+                    <button onclick="closeModal()" class="text-[9px] text-red-400 mt-2 underline block mx-auto">Cerrar</button>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+
+        function submitMonsterMath(ans) {
+            closeModal();
+            if (ans === 140) {
+                sfx.unlock();
+                addItemToInventory('keyMonster', 'Llave Monstruo', 'fa-key', 'text-yellow-400');
+                updateDialogue("PROTAGONISTA", "¡Resolviste el enigma y conseguiste la llave de salida!");
+            } else {
+                handleLifeLoss("¡El monstruo despertó al fallar la respuesta y te atacó!");
+            }
+        }
+
+        function handleLifeLoss(msg) {
+            lives--;
+            sfx.jumpscare();
+            updateHUD();
+            if (lives <= 0) {
+                triggerGameOver(msg);
+            } else {
+                updateDialogue("SISTEMA", `${msg} Vidas restantes: ${lives}`);
+            }
+        }
+
+        function triggerGameOver(msg) {
+            gameState = "GAMEOVER";
+            document.getElementById("end-msg").innerText = msg + " Te has quedado sin vidas.";
+            document.getElementById("end-modal").classList.remove("hidden");
+        }
+
+        function triggerVictory() {
+            gameState = "VICTORY";
+            document.getElementById("victory-modal").classList.remove("hidden");
+            if (vCtx) {
+                vCtx.fillStyle = "#030208";
+                vCtx.fillRect(0, 0, victoryCanvas.width, victoryCanvas.height);
+
+                // Dibujar silueta de monstruo en la puerta
+                vCtx.fillStyle = "#1e1b4b";
+                vCtx.fillRect(300, 40, 160, 200);
+
+                vCtx.fillStyle = "#ef4444";
+                vCtx.fillRect(350, 100, 14, 14);
+                vCtx.fillRect(396, 100, 14, 14);
+
+                vCtx.fillStyle = "#a855f7";
+                vCtx.font = "14px monospace";
+                vCtx.textAlign = "center";
+                vCtx.fillText("EL HUÉSPED TE OBSERVA...", 380, 250);
+            }
+        }
+
+        function returnToMenu() {
+            document.getElementById("end-modal").classList.add("hidden");
+            document.getElementById("victory-modal").classList.add("hidden");
+            document.getElementById("sidebar-hud").classList.add("hidden");
+            document.getElementById("top-bar-overlay").classList.add("hidden");
+            document.getElementById("bottom-dialogue").classList.add("hidden");
+            document.getElementById("main-menu").classList.remove("hidden");
+            gameState = "MENU";
+        }
+
+        function isColliding(a, b) {
+            return a.x < b.x + b.w && a.x + a.width > b.x && a.y < b.y + b.h && a.y + a.height > b.y;
+        }
+
+        function updatePlayer() {
+            if (player.isHiding) return;
+
+            let dx = 0;
+            let dy = 0;
+
+            if (keys['KeyW'] || keys['ArrowUp']) { dy = -player.speed; player.dir = 'up'; }
+            if (keys['KeyS'] || keys['ArrowDown']) { dy = player.speed; player.dir = 'down'; }
+            if (keys['KeyA'] || keys['ArrowLeft']) { dx = -player.speed; player.dir = 'left'; }
+            if (keys['KeyD'] || keys['ArrowRight']) { dx = player.speed; player.dir = 'right'; }
+
+            if (dx !== 0 || dy !== 0) {
+                sfx.step();
+            }
+
+            player.x += dx;
+            const current = rooms[currentRoom];
+            current.walls.forEach(w => {
+                if (isColliding({x: player.x, y: player.y, width: player.width, height: player.height}, w)) {
+                    player.x -= dx;
+                }
+            });
+
+            player.y += dy;
+            current.walls.forEach(w => {
+                if (isColliding({x: player.x, y: player.y, width: player.width, height: player.height}, w)) {
+                    player.y -= dy;
+                }
+            });
+
+            // Comprobación de colisión con láser en sótano (Sala 3)
+            if (currentRoom === 3) {
+                if (current.laserBox.active) {
+                    const lb = current.laserBox;
+                    // Comprobar si el jugador toca el perímetro láser que rodea el cofre
+                    const playerBox = { x: player.x, y: player.y, width: player.width, height: player.height };
+                    if (isColliding(playerBox, lb)) {
+                        handleLifeLoss("¡Tocaste la barrera láser defensiva!");
+                        player.x = 350;
+                        player.y = 300; // Regresar a la entrada de la habitación
+                    }
+                }
+            }
+        }
+
+        function updateSentinels() {
+            if (currentRoom !== 2) return;
+            const current = rooms[2];
+            current.sentinels.forEach(s => {
+                const dist = Math.hypot(player.x - s.x, player.y - s.y);
+
+                // Como son más pequeños y rápidos y sin radio visible, colisión directa o proximidad muy cercana atrapa
+                if (dist < 26 && !player.isHiding) {
+                    handleLifeLoss("¡Un centinela rápido te ha alcanzado!");
+                    player.x = 350;
+                    player.y = 320;
+                }
+
+                s.x += s.vx;
+                s.y += s.vy;
+
+                if (s.x < s.minX || s.x > s.maxX) { s.vx *= -1; s.x = Math.max(s.minX, Math.min(s.maxX, s.x)); }
+                if (s.y < s.minY || s.y > s.maxY) { s.vy *= -1; s.y = Math.max(s.minY, Math.min(s.maxY, s.y)); }
+            });
+        }
+
+        function updateSentinels() {
+            if (currentRoom !== 2) return;
+            const current = rooms[2];
+            current.sentinels.forEach(s => {
+                // Movimiento libre de rebote (puntos rojos independientes, sin persecución directa)
+                s.x += s.vx;
+                s.y += s.vy;
+
+                if (s.x < s.minX || s.x > s.maxX) { s.vx *= -1; s.x = Math.max(s.minX, Math.min(s.maxX, s.x)); }
+                if (s.y < s.minY || s.y > s.maxY) { s.vy *= -1; s.y = Math.max(s.minY, Math.min(s.maxY, s.y)); }
+
+                const dist = Math.hypot((player.x + player.width/2) - s.x, (player.y + player.height/2) - s.y);
+                if (dist < 16 && !player.isHiding) {
+                    handleLifeLoss("¡Te tocó un punto centinela rojo!");
+                    player.x = 350;
+                    player.y = 320;
+                }
+            });
+        }
+
+        function updateMonster() {
+            if (currentRoom !== 4) return;
+            const current = rooms[4];
+
+            if (monsterCycleState === "ACTIVE") {
+                current.monster.x += current.monster.vx;
+                current.monster.y += current.monster.vy;
+
+                if (current.monster.x < 100 || current.monster.x > 600) current.monster.vx *= -1;
+                if (current.monster.y < 60 || current.monster.y > 300) current.monster.vy *= -1;
+
+                const dist = Math.hypot(player.x - current.monster.x, player.y - current.monster.y);
+                if (dist < current.monster.radius && !player.isHiding) {
+                    handleLifeLoss("¡El monstruo activo te ha atrapado!");
+                    player.x = 100;
+                    player.y = 180;
+                }
+            }
+        }
+
+        // --- RENDERIZADO PIXEL ART ---
+        function renderPlayerPixelArt(x, y) {
+            // Piel morena
+            ctx.fillStyle = "#b45309";
+            ctx.fillRect(x + 8, y + 4, 20, 16); // Cabeza
+
+            // Cabello negro
+            ctx.fillStyle = "#111827";
+            ctx.fillRect(x + 8, y + 2, 20, 6);
+
+            // Ojos
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(x + 12, y + 10, 4, 4);
+            ctx.fillRect(x + 20, y + 10, 4, 4);
+            ctx.fillStyle = "#000000";
+            ctx.fillRect(x + 14, y + 11, 2, 2);
+            ctx.fillRect(x + 22, y + 11, 2, 2);
+
+            // Polera negra
+            ctx.fillStyle = "#1f2937";
+            ctx.fillRect(x + 6, y + 20, 24, 18);
+
+            // Manos
+            ctx.fillStyle = "#b45309";
+            ctx.fillRect(x + 2, y + 22, 4, 10);
+            ctx.fillRect(x + 30, y + 22, 4, 10);
+
+            // Short naranja
+            ctx.fillStyle = "#ea580c";
+            ctx.fillRect(x + 8, y + 38, 20, 10);
+        }
+
+        function renderMonsterPixelArt(mx, my, active) {
+            ctx.fillStyle = active ? "#7e22ce" : "#3b0764";
+            ctx.fillRect(mx + 12, my + 10, 40, 65); // Cuerpo
+
+            // Cabeza
+            ctx.fillRect(mx + 8, my - 15, 48, 30);
+
+            // Ojos amenazantes
+            ctx.fillStyle = active ? "#ef4444" : "#9333ea";
+            ctx.fillRect(mx + 16, my - 6, 8, 8);
+            ctx.fillRect(mx + 40, my - 6, 8, 8);
+
+            // Manos garras
+            ctx.fillStyle = "#581c87";
+            ctx.fillRect(mx + 2, my + 20, 10, 20);
+            ctx.fillRect(mx + 52, my + 20, 10, 20);
+        }
+
+        function renderDogPixelArt(dx, dy, distracted) {
+            ctx.fillStyle = "#292524";
+            ctx.fillRect(dx + 2, dy + 5, 36, 22); // Cuerpo
+
+            ctx.fillStyle = "#1c1917";
+            ctx.fillRect(dx + 25, dy - 2, 16, 16); // Cabeza
+
+            ctx.fillStyle = distracted ? "#22c55e" : "#ef4444";
+            ctx.fillRect(dx + 35, dy + 2, 4, 4); // Ojo
+
+            ctx.fillStyle = "#1c1917";
+            ctx.fillRect(dx + 6, dy + 25, 6, 8);
+            ctx.fillRect(dx + 28, dy + 25, 6, 8);
+        }
+
+        function renderRoom1() {
+            const current = rooms[1];
+            ctx.fillStyle = "#090510";
+            ctx.fillRect(40, 30, 680, 340);
+
+            // Estuche / Cama azul FNAF4 style
+            ctx.fillStyle = "#1e3a8a";
+            ctx.fillRect(current.bed.x, current.bed.y, current.bed.w, current.bed.h);
+            // Peluche Fredbear en cama
+            ctx.fillStyle = "#eab308";
+            ctx.fillRect(current.bed.x + 70, current.bed.y + 30, 50, 45);
+
+            // Armario morado
+            ctx.fillStyle = "#3b0764";
+            ctx.fillRect(current.wardrobe.x, current.wardrobe.y, current.wardrobe.w, current.wardrobe.h);
+
+            // Mesa de estudio
+            ctx.fillStyle = "#451a03";
+            ctx.fillRect(current.desk.x, current.desk.y, current.desk.w, current.desk.h);
+
+            // Puerta superior
+            ctx.fillStyle = current.door.unlocked ? "#10b981" : "#7f1d1d";
+            ctx.fillRect(current.door.x, current.door.y, current.door.w, current.door.h);
+        }
+
+        function renderRoom2() {
+            const current = rooms[2];
+            ctx.fillStyle = "#090510";
+            ctx.fillRect(40, 30, 680, 340);
+
+            // Elegante alfombra central en el salón principal
+            ctx.fillStyle = "#3b0764";
+            ctx.fillRect(200, 100, 380, 180);
+            ctx.strokeStyle = "#7e22ce";
+            ctx.lineWidth = 2;
+            ctx.strokeRect(200, 100, 380, 180);
+
+            // Puerta superior (sótano) y inferior (dormitorio)
+            ctx.fillStyle = current.doorBasement.solved ? "#10b981" : "#581c87";
+            ctx.fillRect(current.doorBasement.x, current.doorBasement.y, current.doorBasement.w, current.doorBasement.h);
+
+            ctx.fillStyle = "#3b82f6";
+            ctx.fillRect(current.doorBack.x, current.doorBack.y, current.doorBack.w, current.doorBack.h);
+
+            // Puerta monstruo derecha
+            ctx.fillStyle = "#7f1d1d";
+            ctx.fillRect(current.doorMonster.x, current.doorMonster.y, current.doorMonster.w, current.doorMonster.h);
+
+            // Mueble linterna y Mesa del pasillo
+            ctx.fillStyle = "#451a03";
+            ctx.fillRect(current.cabinetFlashlight.x, current.cabinetFlashlight.y, current.cabinetFlashlight.w, current.cabinetFlashlight.h);
+            ctx.fillRect(current.tableHall.x, current.tableHall.y, current.tableHall.w, current.tableHall.h);
+
+            // Centinelas en puntos rojos pequeños móviles
+            current.sentinels.forEach(s => {
+                ctx.fillStyle = "#ef4444";
+                ctx.beginPath();
+                ctx.arc(s.x, s.y, 6, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.shadowColor = "#ef4444";
+                ctx.shadowBlur = 8;
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            });
+        }
+
+        function renderRoom3() {
+            const current = rooms[3];
+            ctx.fillStyle = "#030208";
+            ctx.fillRect(40, 30, 680, 340);
+
+            ctx.fillStyle = "#10b981";
+            ctx.fillRect(current.doorBackHall.x, current.doorBackHall.y, current.doorBackHall.w, current.doorBackHall.h);
+
+            // Perro en la esquina superior izquierda
+            renderDogPixelArt(current.dog.x, current.dog.y, current.dog.distracted);
+
+            // Plato al costado del perro
+            ctx.fillStyle = "#94a3b8";
+            ctx.fillRect(current.plate.x, current.plate.y, current.plate.w, current.plate.h);
+            if (current.plate.hasMeat) {
+                ctx.fillStyle = "#ef4444";
+                ctx.fillRect(current.plate.x + 8, current.plate.y + 6, 20, 12);
+            }
+
+            // Switch en la pared izquierda del sótano
+            const sw = current.wallSwitch;
+            ctx.fillStyle = sw.active ? "#eab308" : "#22c55e";
+            ctx.fillRect(sw.x, sw.y, sw.w, sw.h);
+            ctx.fillStyle = "#000000";
+            ctx.font = "8px monospace";
+            ctx.fillText("SW", sw.x + 6, sw.y + 24);
+
+            // Barrera láser rodeando por completo el cofre de la palanca
+            if (current.laserBox.active) {
+                ctx.strokeStyle = "#ef4444";
+                ctx.lineWidth = 3;
+                ctx.strokeRect(current.laserBox.x, current.laserBox.y, current.laserBox.w, current.laserBox.h);
+                ctx.fillStyle = "rgba(239, 68, 68, 0.15)";
+                ctx.fillRect(current.laserBox.x, current.laserBox.y, current.laserBox.w, current.laserBox.h);
+            }
+
+            // Cofre / Caja con la palanca
+            ctx.fillStyle = current.leverBox.collected ? "#1e293b" : "#eab308";
+            ctx.fillRect(current.leverBox.x, current.leverBox.y, current.leverBox.w, current.leverBox.h);
+            ctx.fillStyle = "#000000";
+            ctx.fillRect(current.leverBox.x + 20, current.leverBox.y + 20, 20, 20);
+        }
+
+        function renderRoom4() {
+            const current = rooms[4];
+            ctx.fillStyle = "#090510";
+            ctx.fillRect(40, 30, 680, 340);
+
+            ctx.fillStyle = "#3b82f6";
+            ctx.fillRect(current.doorBackHall.x, current.doorBackHall.y, current.doorBackHall.w, current.doorBackHall.h);
+
+            // Monstruo y radio de captura
+            if (monsterCycleState === "ACTIVE") {
+                ctx.fillStyle = "rgba(168, 85, 247, 0.25)";
+                ctx.beginPath();
+                ctx.arc(current.monster.x + 32, current.monster.y + 55, current.monster.radius, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            renderMonsterPixelArt(current.monster.x, current.monster.y, monsterCycleState === "ACTIVE");
+
+            // Salida con tablas
+            ctx.fillStyle = current.exitPlanks.barricaded ? "#7c2d12" : "#10b981";
+            ctx.fillRect(current.exitPlanks.x, current.exitPlanks.y, current.exitPlanks.w, current.exitPlanks.h);
+        }
+
+        function render() {
+            if (gameState === "MENU") return;
+
+            ctx.fillStyle = "#030208";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            if (currentRoom === 1) renderRoom1();
+            else if (currentRoom === 2) renderRoom2();
+            else if (currentRoom === 3) renderRoom3();
+            else if (currentRoom === 4) renderRoom4();
+
+            if (!player.isHiding) {
+                renderPlayerPixelArt(player.x, player.y);
+            } else {
+                ctx.fillStyle = "rgba(168, 85, 247, 0.4)";
+                ctx.fillRect(player.x, player.y, player.width, player.height);
+            }
+
+            // OSCURIDAD / LINTERNA DIRECCIONAL EN MANO (Ángulo de 60° hacia delante)
+            // Se activa en cualquier habitación si la linterna está encendida y el jugador la posee (o por defecto en sótano)
+            const hasFlashlightItem = hasItem('flashlight') || currentRoom === 3;
+            if (hasFlashlightItem && player.flashlightOn && gameState === "PLAYING") {
+                ctx.save();
+                ctx.fillStyle = "rgba(3, 2, 8, 0.95)";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                ctx.globalCompositeOperation = "destination-out";
+                
+                const px = player.x + player.width / 2;
+                const py = player.y + player.height / 2;
+                
+                let baseAngle = 0;
+                if (player.dir === 'right') baseAngle = 0;
+                else if (player.dir === 'down') baseAngle = Math.PI / 2;
+                else if (player.dir === 'left') baseAngle = Math.PI;
+                else if (player.dir === 'up') baseAngle = -Math.PI / 2;
+
+                const halfCone = (60 * Math.PI / 180) / 2; // 30 grados a cada lado (60 grados total)
+                const radius = 160;
+
+                ctx.beginPath();
+                ctx.moveTo(px, py);
+                ctx.arc(px, py, radius, baseAngle - halfCone, baseAngle + halfCone);
+                ctx.closePath();
+                ctx.fill();
+
+                ctx.restore();
+            } else if (!hasFlashlightItem && currentRoom !== 3 && gameState === "PLAYING") {
+                // Oscuridad total si no tiene linterna
+                ctx.fillStyle = "rgba(3, 2, 8, 0.9)";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = "#f3e8ff";
+                ctx.font = "8px monospace";
+                ctx.textAlign = "center";
+                ctx.fillText("ESTÁ OSCURO. CONSIGUE LA LINTERNA EN EL SALÓN [F].", canvas.width/2, 30);
+            }
+        }
+
+        function gameLoop() {
+            if (gameState === "PLAYING") {
+                updatePlayer();
+                updateSentinels();
+                updateMonster();
+            }
+            render();
+            requestAnimationFrame(gameLoop);
+        }
+
+        window.onload = () => {
+            requestAnimationFrame(gameLoop);
+        };
+    </script>
+</body>
+</html>
